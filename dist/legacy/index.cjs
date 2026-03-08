@@ -252,8 +252,13 @@ var getShadow = (shadowMap, array) => {
 var hasChanged = (shadowMap, array, index, epsilon = 1e-4) => {
   const shadow = getShadow(shadowMap, array);
   const currentValue = array[index];
+  const shadowValue = shadow[index];
+  if (shadowValue === void 0) {
+    shadow[index] = currentValue;
+    return true;
+  }
   const actualEpsilon = getEpsilonForType(array, epsilon);
-  const changed = actualEpsilon > 0 ? Math.abs(shadow[index] - currentValue) > actualEpsilon : shadow[index] !== currentValue;
+  const changed = actualEpsilon > 0 ? Math.abs(shadowValue - currentValue) > actualEpsilon : shadowValue !== currentValue;
   shadow[index] = currentValue;
   return changed;
 };
