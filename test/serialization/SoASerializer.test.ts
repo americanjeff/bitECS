@@ -583,5 +583,36 @@ describe('SoA Serialization and Deserialization', () => {
 
       expect(Precision.value[e2]).toBeCloseTo(3.141592653589793)
     })
+
+    it('should not report changes for entities without a component (undefined slots)', () => {
+      const Force = { count: u8([]) }
+      const Position = { x: f32([]), y: f32([]) }
+      const components = [Force, Position]
+
+      const serialize = createSoASerializer(components, { diff: true })
+
+      // Entity 1 has Position but NOT Force
+      // Entity 2 has Force
+      Position.x[1] = 10; Position.y[1] = 20
+      Force.count[2] = 5
+      Position.x[2] = 30; Position.y[2] = 40
+
+      // Force.count[1] is undefined (entity 1 has no Force)
+      // Force.count[2] is 5 (entity 2 has Force)
+
+      // First call records all values and returns data
+      const data1 = serialize([1, 2])
+      expect(data1.byteLength).toBeGreaterThan(0)
+
+      // Second call with NO changes should return empty buffer
+      // BUG PREVIOUSLY: undefined vs 0 in shadow caused false positive change
+      const data2 = serialize([1, 2])
+      expect(data2.byteLength).toBe(0)
+
+      // Actual change should still work
+      Force.count[2] = 10
+      const data3 = serialize([1, 2])
+      expect(data3.byteLength).toBeGreaterThan(0)
+    })
   })
 })
