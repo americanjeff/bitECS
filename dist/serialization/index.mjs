@@ -205,7 +205,7 @@ var getShadow = (shadowMap, array2) => {
     if (ArrayBuffer.isView(array2)) {
       shadow = new array2.constructor(array2.length);
     } else {
-      shadow = new Array(array2.length).fill(0);
+      shadow = new Array(array2.length);
     }
     shadowMap.set(array2, shadow);
   }
@@ -215,8 +215,15 @@ var hasChanged = (shadowMap, array2, index, epsilon = 1e-4) => {
   const shadow = getShadow(shadowMap, array2);
   const currentValue = array2[index];
   const shadowValue = shadow[index];
+  if (currentValue === void 0 && shadowValue === void 0) {
+    return false;
+  }
   if (shadowValue === void 0) {
     shadow[index] = currentValue;
+    return true;
+  }
+  if (currentValue === void 0) {
+    shadow[index] = void 0;
     return true;
   }
   const actualEpsilon = getEpsilonForType(array2, epsilon);

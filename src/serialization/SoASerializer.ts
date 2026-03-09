@@ -298,13 +298,10 @@ const getEpsilonForType = (array: any, epsilon: number) =>
 const getShadow = (shadowMap: Map<any, any>, array: any) => {
     let shadow = shadowMap.get(array)
     if (!shadow) {
-        // Create shadow array with proper initialization
         if (ArrayBuffer.isView(array)) {
-            // TypedArray
             shadow = new (array.constructor as any)((array as any).length)
         } else {
-            // Regular array (like f32([]) arrays) - initialize with zeros
-            shadow = new Array(array.length).fill(0)
+            shadow = new Array(array.length)
         }
         shadowMap.set(array, shadow)
     }
@@ -319,8 +316,17 @@ const hasChanged = (shadowMap: Map<any, any>, array: any, index: number, epsilon
     const currentValue = array[index]
     const shadowValue = shadow[index]
     
-    if (shadowValue === void 0) {
+    if (currentValue === undefined && shadowValue === undefined) {
+        return false
+    }
+    
+    if (shadowValue === undefined) {
         shadow[index] = currentValue
+        return true
+    }
+    
+    if (currentValue === undefined) {
+        shadow[index] = undefined
         return true
     }
     
