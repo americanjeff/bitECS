@@ -545,24 +545,51 @@ export type SoASerializerOptions = {
     diff?: boolean
     buffer?: ArrayBuffer
     epsilon?: number
+    /**
+     * Optional callback that returns the set of entity IDs removed since the
+     * last call and clears the tracking set. When provided, the serializer
+     * clears stale shadow values for ALL component arrays at those EID slots
+     * before each diff pass.
+     * Typically supplied via ObserverSerializerFunction.getRemovals.
+     */
+    getRemovals?: () => Set<number>
+}
+
+/**
+ * Clears shadow entries for a specific entity ID across all component arrays.
+ */
+const clearEntityShadow = (shadowMap: Map<any, any>, eid: number) => {
+    for (const shadow of shadowMap.values()) {
+        shadow[eid] = undefined
+    }
 }
 
 /**
  * Creates a serializer function for Structure of Arrays (SoA) data.
  * @param {ComponentRef[]} components - The components to serialize.
  * @param {SoASerializerOptions} [options] - Serializer options.
- * @returns {Function} A function that serializes the SoA data.
+ * @returns {SoASerializerFunction} A serializer with an optional clearEntity method in diff mode.
  */
-export const createSoASerializer = (components: (ComponentRef | PrimitiveBrand | TypedArray | ArrayType<any>)[], options: SoASerializerOptions = {}) => {
-    const { 
-        diff = false, 
-        buffer = new ArrayBuffer(1024 * 1024 * 100), 
-        epsilon = 0.0001 
+export const createSoASerializer = (components: (ComponentRef | PrimitiveBrand | TypedArray | ArrayType<any>)[], options: SoASerializerOptions = {}): SoASerializerFunction => {
+    const {
+        diff = false,
+        buffer = new ArrayBuffer(1024 * 1024 * 100),
+        epsilon = 0.0001,
+        getRemovals,
     } = options
     const view = new DataView(buffer)
     const shadowMap = diff ? new Map() : undefined
     const componentSerializers = components.map(component => createComponentSerializer(component, diff, shadowMap, epsilon))
-    return (indices: number[] | readonly number[]): ArrayBuffer => {
+
+    const serialize = (indices: number[] | readonly number[]): ArrayBuffer => {
+        // Before diffing, clear shadow for any entities that were removed since
+        // the last call.
+        if (diff && shadowMap && getRemovals) {
+            for (const eid of getRemovals()) {
+                clearEntityShadow(shadowMap, eid)
+            }
+        }
+
         let offset = 0
         for (let i = 0; i < indices.length; i++) {
             const index = indices[i]
@@ -572,6 +599,18 @@ export const createSoASerializer = (components: (ComponentRef | PrimitiveBrand |
         }
         return buffer.slice(0, offset)
     }
+
+    const result = serialize as SoASerializerFunction
+    if (diff && shadowMap) {
+        result.clearEntity = (eid: number) => clearEntityShadow(shadowMap, eid)
+    }
+    return result
+}
+
+export type SoASerializerFunction = {
+    (indices: number[] | readonly number[]): ArrayBuffer
+    /** Clears shadow state for a specific entity ID (diff mode only). */
+    clearEntity?: (eid: number) => void
 }
 
 /**

@@ -447,16 +447,27 @@ var createComponentDeserializer = (component, diff = false) => {
     return bytesRead;
   };
 };
+var clearEntityShadow = (shadowMap, eid) => {
+  for (const shadow of shadowMap.values()) {
+    shadow[eid] = void 0;
+  }
+};
 var createSoASerializer = (components, options = {}) => {
   const {
     diff = false,
     buffer = new ArrayBuffer(1024 * 1024 * 100),
-    epsilon = 1e-4
+    epsilon = 1e-4,
+    getRemovals
   } = options;
   const view = new DataView(buffer);
   const shadowMap = diff ? /* @__PURE__ */ new Map() : void 0;
   const componentSerializers = components.map((component) => createComponentSerializer(component, diff, shadowMap, epsilon));
-  return (indices) => {
+  const serialize = (indices) => {
+    if (diff && shadowMap && getRemovals) {
+      for (const eid of getRemovals()) {
+        clearEntityShadow(shadowMap, eid);
+      }
+    }
     let offset = 0;
     for (let i = 0; i < indices.length; i++) {
       const index = indices[i];
@@ -466,6 +477,11 @@ var createSoASerializer = (components, options = {}) => {
     }
     return buffer.slice(0, offset);
   };
+  const result = serialize;
+  if (diff && shadowMap) {
+    result.clearEntity = (eid) => clearEntityShadow(shadowMap, eid);
+  }
+  return result;
 };
 var createSoADeserializer = (components, options = {}) => {
   const { diff = false } = options;
@@ -1004,12 +1020,14 @@ var createObserverSerializer = (world, networkedTag, components, options = {}) =
   let offset = 0;
   const queue = [];
   const relationTargets = /* @__PURE__ */ new Map();
+  const removedEntities = /* @__PURE__ */ new Set();
   (0, import_bitecs2.observe)(world, (0, import_bitecs2.onAdd)(networkedTag), (eid) => {
     queue.push([eid, 0 /* AddEntity */, -1]);
   });
   (0, import_bitecs2.observe)(world, (0, import_bitecs2.onRemove)(networkedTag), (eid) => {
     queue.push([eid, 1 /* RemoveEntity */, -1]);
     relationTargets.delete(eid);
+    removedEntities.add(eid);
   });
   components.forEach((component, i) => {
     if ((0, import_bitecs2.isRelation)(component)) {
@@ -1046,7 +1064,7 @@ var createObserverSerializer = (world, networkedTag, components, options = {}) =
       });
     }
   });
-  return () => {
+  const serialize = () => {
     offset = 0;
     for (let i = 0; i < queue.length; i++) {
       const [entityId, type, componentId, targetId, relationData] = queue[i];
@@ -1069,6 +1087,14 @@ var createObserverSerializer = (world, networkedTag, components, options = {}) =
     queue.length = 0;
     return backingBuffer.slice(0, offset);
   };
+  const getRemovals = () => {
+    const result = new Set(removedEntities);
+    removedEntities.clear();
+    return result;
+  };
+  const serializerFn = serialize;
+  serializerFn.getRemovals = getRemovals;
+  return serializerFn;
 };
 var createObserverDeserializer = (world, networkedTag, components, options = {}) => {
   let entityIdMapping = options.idMap || /* @__PURE__ */ new Map();
