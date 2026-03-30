@@ -1067,7 +1067,12 @@ var createObserverSerializer = (world, networkedTag, components, options = {}) =
   const serialize = () => {
     offset = 0;
     for (let i = 0; i < queue.length; i++) {
-      const [entityId, type, componentId, targetId, relationData] = queue[i];
+      const entry = queue[i];
+      const entityId = entry[0];
+      const type = entry[1];
+      const componentId = entry[2];
+      const targetId = entry[3];
+      const relationData = entry[4];
       dataView.setUint32(offset, entityId);
       offset += 4;
       dataView.setUint8(offset, type);
